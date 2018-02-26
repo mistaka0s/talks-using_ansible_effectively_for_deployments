@@ -307,6 +307,8 @@ Packaging
     + only packages signed with the GPG right key can be deployed.
 
 - Treat packages as another artifact that you generate during your build process
+
+- Build once, use many
 ]
 
 ---
@@ -388,8 +390,65 @@ works for you in the long run
 
 ---
 class: center, middle, inverse
-# An packaging example
+# Packaging Example
 
+---
+class: middle
+name: how
+.left-column[
+Packaging Example
+]
+.right-column[
+Ruby on Rails project from source.
+
+Steps:
+1. Check out project at `version`
+2. Use `bundler` to download and compile dependencies from rubygems.org
+3. edit config with environment specific settings (endpoints etc)
+4. Use the local version of `rake` to precompile static assets (JS, CSS etc)
+5. Change the ownership of files to `user1`, which will run the code
+
+In code:
+```asciidoc
+git checkout -b <version> <project>
+cd <project>
+bundle check
+bundle install --deployment --binstubs
+<edit config>
+bundle exec rake assets:clobber assets:precompile
+chown -R <project> user1:user1
+```
+
+Total time: 2 minutes
+
+]
+
+---
+class: middle
+name: how
+
+# Compile on deploy
+
+If something goes wrong during the build, can the deployment be trusted?
+- External dependencies
+-
+
+
+When your building on 20 servers and it fails on 2, how do you react
+![:scale 110%](build-scale-problem.png)
+
+---
+class: middle
+name: how
+
+# Dependency drift
+
+![:scale 80%](build-dependency-drift.png)
+
+???
+You deploy to different environments at different times, what happens when a dependency is upgraded in the meantime?
+
+What you tested, may not the same as what is deployed in production.
 ---
 class: middle
 
