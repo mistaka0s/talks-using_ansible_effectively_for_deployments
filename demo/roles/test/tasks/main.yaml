@@ -1,0 +1,4 @@
+---
+- name: Print out the variable 'demo'
+  debug:
+    msg: "The value of 'demo' is {{ demo }}"

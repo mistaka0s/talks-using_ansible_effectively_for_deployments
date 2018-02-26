@@ -169,8 +169,9 @@ Walk before you run
 
 .right-column[
 - Focus on the outcome, not the steps.
-    + 'I need to configure a virtual host'
-    + 'I need to edit an Apache/NGINX config file with this content'
+
+   - 'I need to configure a virtual host' .green[.fa[.fa-check-circle[]]]
+   - 'I need to edit an Apache/NGINX config file with this content' .red[.fa[.fa-minus-circle[]]]
 
 - Start fresh each time
     + Note down dependencies
@@ -242,7 +243,8 @@ Idempotency
 .right-column[
 Should always be aiming for idempotency when writing your automation code
 
-- Run your Ansible playbook multiple times, do you get the same behaviour? Any changes made between runs?
+- Run your Ansible playbook multiple times, do you get the same behaviour?
+    + Any changes made between runs?
 
 - Most tasks within Ansible are idempotent
     + In the `useradd` example before
@@ -253,8 +255,11 @@ Should always be aiming for idempotency when writing your automation code
 
 - Try to avoid `command` and `shell`
     + you'd have to make sure it's idempotent yourself.
+
 ]
 
+???
+Not unique to Ansible, AWS has the same concept as well.
 
 ---
 class: center, middle, inverse
@@ -278,6 +283,9 @@ Leverage the operating system's package management system to do **distribute** y
     + easy to distribute
         * compared to AMI/Docker container
 
+Think of your code as a part in a car - your part may be used in many different models of cars, but it's always packaged up to be pluggable into a particular model.
+
+Packaging your code ensures that it's directly `pluggable`, rather than spend lots of time trying to fit everything together.
 ]
 ---
 class: middle
@@ -297,6 +305,8 @@ Packaging
 
 - Packages can be **signed using GPG**
     + only packages signed with the GPG right key can be deployed.
+
+- Treat packages as another artifact that you generate during your build process
 ]
 
 ---
@@ -316,7 +326,7 @@ Packaging
     +  so you don't need to specify them when installing
 
 - Can easily **determine the version** of the application is deployed
-    + Just query yum/rpm for the versioned installed
+    + Just query yum/rpm for the version installed
 
     vs
 
@@ -372,6 +382,566 @@ __AVOID__:
 
 ```asciidoc
 Invest in the time to generate RPM/packaged artifacts
-works for you in the longrun
+works for you in the long run
 ```
 ]
+
+---
+class: center, middle, inverse
+# An packaging example
+
+---
+class: middle
+
+We used to do this on each server/instance we deploy to:
+```asciidoc
+git checkout -b <version> <project>
+cd <project>
+bundle check
+bundle install --deployment --binstubs
+<edit config>
+bundle exec rake assets:clobber assets:precompile
+chown -R <project> user1:user1
+```
+
+With RPM packaging we now only need to do this:
+```asciidoc
+yum install <project>-<version>
+<edit config> # or use etcd, confd, consul/consul-template
+```
+
+In ansible:
+```ansible
+yum:
+    name: "{{ project }}-{{ version }}"
+    state: present
+```
+
+---
+class: center, middle, inverse
+# Variable order and precedence
+
+---
+class: middle
+name: how
+.left-column[
+Variable order and precedence
+]
+.right-column[
+Ansible 2.x has order of precedence
+```
+- role defaults
+- inventory file or script group vars
+- inventory group_vars/all
+- playbook group_vars/all
+- inventory group_vars/*
+- playbook group_vars/*
+- inventory file or script host vars
+- inventory host_vars/*
+- playbook host_vars/*
+- host facts
+- play vars
+- play vars_prompt
+- play vars_files
+- role vars (defined in role/vars/main.yml)
+- block vars (only for tasks in block)
+- task vars (only for the task)
+- role (and include_role) params
+- include params
+- include_vars
+- set_facts / registered vars
+- extra vars (always win precedence)
+```
+
+More info: [Ansible docs - Variable Precedence](https://docs.ansible.com/ansible/latest/playbooks_variables.html#variable-precedence-where-should-i-put-a-variable)
+]
+---
+class: middle
+name: how
+.left-column[
+Variable order and precedence
+]
+.right-column[
+Ansible 2.x has order of precedence for variables
+```
+*- role defaults
+- inventory file or script group vars
+- inventory group_vars/all
+*- playbook group_vars/all
+- inventory group_vars/*
+*- playbook group_vars/*
+- inventory file or script host vars
+- inventory host_vars/*
+- playbook host_vars/*
+- host facts
+- play vars
+- play vars_prompt
+- play vars_files
+- role vars (defined in role/vars/main.yml)
+- block vars (only for tasks in block)
+- task vars (only for the task)
+- role (and include_role) params
+- include params
+- include_vars
+- set_facts / registered vars
+*- extra vars (always win precedence)
+```
+
+More info: [Ansible docs - Variable Precedence](https://docs.ansible.com/ansible/latest/playbooks_variables.html#variable-precedence-where-should-i-put-a-variable)
+]
+
+---
+class: middle
+name: how
+.left-column[
+Variable order and precedence
+]
+.right-column[
+
+```
+├── group_vars
+*│   ├── all # playbook group_vars/all
+│   ├── dev
+*│   ├── staging # playbook group_vars/*
+│   ├── prod
+├── playbooks
+└── roles
+    ├── common
+*   │   ├── defaults #role defaults
+    │   ├── files
+    │   ├── handlers
+    │   ├── tasks
+    │   ├── templates
+    │   └── vars
+```
+
+Extra vars:
+```
+ansible-playbook --extra-vars "key=value" ...
+```
+]
+
+---
+class: middle
+name: how
+.left-column[
+Variable order and precedence
+]
+.right-column[
+`inventory/dev/main.yaml`:
+```ini
+[dev]
+server1
+server2
+```
+
+`group_vars/dev`:
+```yaml
+---
+demo: group_vars
+```
+
+`playbook.yaml`:
+```yaml
+---
+- hosts: "{{ env }}"
+  roles:
+    - test
+```
+
+`roles/test/tasks/main.yaml`:
+```yaml
+---
+- name: Print out the variable 'demo'
+  debug:
+    msg: "The value of 'demo' is {{ demo }}"
+```
+]
+
+---
+class: middle
+name: how
+.left-column[
+Variable order and precedence
+]
+.right-column[
+```
+ansible -i inventory\dev -e env=dev playbook.yaml
+```
+
+```yaml
+PLAY [dev] *********************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [localhost]
+
+TASK [test : Print out the variable 'demo'] ************************************
+ok: [localhost] => {
+    "msg": "The value of 'demo' is group_vars"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=2    changed=0    unreachable=0    failed=0
+```
+]
+
+
+---
+class: center, middle, inverse
+# Dynamic Inventory
+
+---
+class: middle
+name: how
+.left-column[
+Dynamic Inventory
+]
+.right-column[
+The trend towards public clouds and virtualized instances means that servers no longer exist for long periods of time.
+
+Having these statically defined in your source code means you end up spending a lot of time managing inventory - could change many times a day.
+
+```
+Ansible can pull inventory information from dynamic sources
+including cloud sources.
+```
+
+You can write your own inventory script - just needs to return valid JSON.
+See [Developing Dynamic Inventory Sources](https://docs.ansible.com/ansible/latest/dev_guide/developing_inventory.html)
+]
+
+---
+class: middle
+name: how
+.left-column[
+Dynamic Inventory
+]
+.right-column[
+The `EC2 dynamic inventory script` dynamic inventory script returns a list of EC2 instances within a region(s).
+
+Not only returns a big list of EC2 instances but returns `host groups` based on the EC2 instance's tag, instance_id, region, vpc , sg etc.
+
+Eg.
+Instances tagged with 'webserver', will be returned as a host under `[tag_webserver]`
+
+Use this to make your Ansible playbooks more generic (but dynamic at the same time)
+```ini
+# inventory host group
+[webserver:children] #Specifying group of groups in Ansible
+tag_webserver
+```
+
+```
+# Playbook
+- hosts: webserver
+...
+```
+]
+
+---
+class: middle
+name: how
+.left-column[
+Dynamic Inventory
+]
+.right-column[
+Another way of adding hosts is during the playbook run.
+
+```yaml
+# Creates a new EC2 instance with a client token of 'id'
+# Client token is 64 char ASCII string and is AWS' way
+# of specifying an idempotent operation.
+# If an ec2 instance with 'id' already exists, it will not create
+# another one
+- name: Create ec2 instance with clienttoken=id.
+  local_action:
+    module: ec2
+    region: "{{ region }}"
+    id: "{{ id }}"
+    ...
+    instance_tags: '{"id":"{{ id }}", "Name":"{{ id }}"}'
+  register: ec2
+
+- name: Add new instance(s) to host group
+  add_host:
+    hostname:"{{ item.public_dns_name }}"
+    groups: "{{ id }}"
+  with_items: ec2.instances
+
+```
+
+Each EC2 instance's public FQDN will be added to host group `id`. And be able to referenced in later plays.
+
+
+]
+
+---
+class: center, middle, inverse
+# Roles
+
+---
+class: middle
+name: how
+.left-column[
+Roles
+]
+.right-column[
+
+- Ansible comes with `ansible-galaxy` which helps you pull in roles from multiple locations, repositories
+
+    + Ansible Galaxy - Online marketplace portal, similar to Puppet Forge
+
+    + git,ssh+git - similar to Puppet's r10k
+
+- Reuse your roles if possible
+
+    + Single purpose
+
+    + Don't be afraid to split them up
+
+- Put them in separate repos so that it can be reused
+]
+
+---
+class: middle
+name: how
+.left-column[
+Roles
+]
+.right-column[
+- Keep development best practices.
+    + If your role is starting to get too long split it up
+    + This applies to playbooks too
+
+`tasks/main.yaml`
+```
+---
+- include: prepare.yaml
+- include: dependencies.yaml
+- "include: {{ansible_os_family}}{{ansible_distribution_major_version}}.yaml"
+```
+
+`tasks/dependencies.yaml`
+```
+- yum:
+    name: foo
+    state: present
+```
+
+`tasks/RedHat7.yaml`
+```
+- yum:
+    name: httpd
+    state: present
+```
+
+]
+
+---
+class: middle
+name: how
+.left-column[
+Roles
+]
+.right-column[
+- Readability is key.
+
+- Ansible docs has lots of examples that use key=value - Don't do this
+
+eg.
+```yaml
+  tasks:
+  - name: ensure postgresql is at the latest version
+    yum: name=postgresql state=latest
+  - name: ensure that postgresql is started
+    service: name=postgresql state=started
+```
+
+Instead this should be more key:value and more YAML-like dictionary structures.
+
+```yaml
+- name: ensure that postgresql is started
+  yum:
+    name: postgresql
+    state: latest
+```
+
+Having your key:values structured in a more YAML-like
+format ensures readability, but also means it's easy to
+see changes made through `diffs`
+]
+
+---
+class: center, middle, inverse
+# Host Groups
+
+---
+class: middle
+name: how
+.left-column[
+Host Groups
+]
+.right-column[
+Design your Ansible playbooks and hosts groups by __function__ rather than by __server__.
+
+It's ok to duplicate hosts and have them in many different groups, it's also good to nest groups.
+
+How I usually nest my host groups.
+
+`environment` <- `location` <- `function`
+`function` <- `location`
+
+```ini
+[dev:children]
+usa
+aus
+
+[aus:children]
+aus-webserver
+aus-database
+
+[webserver:children]
+aus-webserver
+usa-webserver
+
+[aus-webserver]
+webserver1
+webserver2
+...
+```
+]
+
+---
+class: center, middle, inverse
+# Host Groups
+
+---
+class: middle
+name: how
+.left-column[
+Host Groups
+]
+.right-column[
+What's the benefit of doing this?
+
+```yaml
+- hosts: dev
+  tasks:
+    # Note: don't blindly update all packages unless you
+    # manage your own repos
+    - name: ensure all packages are up to date
+      yum:
+        name: *
+        state: present
+
+- hosts: webserver
+  roles:
+    - apache
+    - postgresql-client
+
+- hosts: database
+  ....
+```
+
+"Connects"<sup>*</sup> to the same host twice, once for the dev host, once for the webserver host.
+
+By passing the `--limit webserver` we can restrict the hosts that playbook affects to only hosts in the `webserver` group
+
+
+<sup>*</sup>With some tweaking of SSH connection settings, the connection remains active throughout different plays.
+]
+
+---
+class: middle
+name: how
+.left-column[
+Host Groups
+]
+.right-column[
+- Ansible has a location called `group_vars` that you can place variables for `host groups`.
+
+- For a host in the `webserver` host group
+
+  - variables are loaded from both `group_vars/dev` and `group_vars/webserver`
+
+  - available to be used throughout the playbook.
+
+`dev` should hold environment specific variables - endpoints, loglevels etc.
+
+`webserver` should hold function specfic variables that you want to override from defaults - ports, locations etc.
+]
+
+
+---
+class: center, middle, inverse
+# Miscellaneous
+
+---
+class: middle
+name: how
+.left-column[
+Miscellaneous
+]
+.right-column[
+To make your automation easier, it's important to have the proper supporting services.
+
+Things like:
+ - `LDAP` to manage your users and groups
+
+ - `DNS` to manage endpoints
+
+ - Package repository to manage your packages
+
+`Ansible` (or any other tool) isn't meant to be used to ensure users exists on all your servers.
+]
+
+---
+class: middle
+name: how
+.left-column[
+Miscellaneous
+]
+.right-column[
+## Package repository to manage your packages
+- Off the shelf
+  + `Sonar Nexus` and `Artifactory` has plugins which enumulate a yum or apt repository.
+
+  + Packages are stored in the same place as your code artifacts.
+
+- Build your own
+  + RedHat has a tool called PULP which helps you manage packages between repos.
+
+  + `createrepo` generates all the yum repository metadata for RPMs in the current directory, just serve it in a webserver.
+]
+
+---
+class: middle
+name: how
+.left-column[
+Miscellaneous
+]
+.right-column[
+## Package repository to manage your packages
+- Package repository layout
+
+  + Bare minimum you should have two repos
+
+    * `development` and `stable`
+
+  + treat `development` as unstable builds
+
+  + as soon as a package has passed specific tests or entered in a particular environment - promote it to `stable`
+
+  + Helps with artifact management
+
+    * `development` can be deleted
+
+    * `stable` can be archived
+]
+
+
+
+---
+class: center, middle, inverse
+# Thank you!
+## Questions?
