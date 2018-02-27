@@ -487,7 +487,7 @@ name: how
 Variable order and precedence
 ]
 .right-column[
-Ansible 2.x has order of precedence
+Ansible 2.x has order of precedence for variables
 ```
 - role defaults
 - inventory file or script group vars
@@ -597,7 +597,7 @@ server2
 `group_vars/dev`:
 ```yaml
 ---
-demo: group_vars
+demo: dev
 ```
 
 `playbook.yaml`:
@@ -625,7 +625,7 @@ Variable order and precedence
 ]
 .right-column[
 ```
-ansible -i inventory\dev -e env=dev playbook.yaml
+ansible-playbook -k -i inventory/dev -e env=dev playbook.yaml
 ```
 
 ```yaml
@@ -636,13 +636,19 @@ ok: [localhost]
 
 TASK [test : Print out the variable 'demo'] ************************************
 ok: [localhost] => {
-    "msg": "The value of 'demo' is group_vars"
+    "msg": "The value of 'demo' is dev"
 }
 
 PLAY RECAP *********************************************************************
 localhost                  : ok=2    changed=0    unreachable=0    failed=0
 ```
 ]
+
+Check out `demo` directory in:  https://github.com/mistaka0s/talks-using_ansible_effectively_for_deployments
+
+```
+demo$ ansible-playbook -k -i inventory/test -e env=test playbook.yaml
+```
 
 
 ---
@@ -658,7 +664,7 @@ Dynamic Inventory
 .right-column[
 The trend towards public clouds and virtualized instances means that servers no longer exist for long periods of time.
 
-Having these statically defined in your source code means you end up spending a lot of time managing inventory - could change many times a day.
+Having these statically defined in your source code means you end up spending a lot of time managing inventory - which could change many times daily.
 
 ```
 Ansible can pull inventory information from dynamic sources
